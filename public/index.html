@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>场外基金看板</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width:100%; max-width:100%; overflow-x:hidden; }
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; margin: 0; padding: 8px; background: #f7f8fa; color: #1f2329; -webkit-text-size-adjust:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-y:auto; }
+    .card { background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.06); overflow-x:hidden; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .row.nowrap { flex-wrap: nowrap; }
+    input, button, select { padding:8px 10px; border-radius:8px; border:1px solid #d9dce1; font-size:14px; }
+    .compact-input { width: 120px; min-width: 120px !important; }
+    .compact-input.name { width: 160px; min-width: 160px !important; }
+    button { cursor:pointer; border:none; background:#2563eb; color:#fff; }
+    button.secondary { border:1px solid #d9dce1; background:#fff; color:#1f2329; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { padding:7px; border-bottom:1px solid #eceff3; text-align:left; }
+    .up { color:#cf1322; font-weight:600; }
+    .down { color:#1d39c4; font-weight:600; }
+    .muted { color:#8b95a7; font-size:12px; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .fund-toolbar { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:nowrap; }
+    .fund-toolbar h3 { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .fund-actions { display:flex; gap:6px; flex:0 0 auto; }
+    .fund-actions button { white-space: nowrap; }
+    .avatar { width:32px; height:32px; border-radius:50%; border:none; background:#111827; color:#fff; font-weight:700; cursor:pointer; }
+    .account-menu { position:absolute; right:0; top:38px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; box-shadow:0 8px 20px rgba(0,0,0,.12); min-width:180px; }
+    .summary-grid { display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:8px; }
+    .summary-item { background:#f8fafc; border:1px solid #eef2f7; border-radius:10px; padding:8px; }
+    .summary-item b { display:block; margin-top:2px; font-size:14px; }
+    .drag-handle { cursor: grab; font-weight:700; padding:6px 10px; display:inline-block; border:1px solid #d9dce1; border-radius:8px; background:#fff; color:#1f2329; user-select:none; }
+    .th-sort-btn { padding:1px 6px; border:1px solid #e5e7eb; border-radius:999px; font-size:11px; line-height:1.2; background:#fff; color:#6b7280; vertical-align:middle; }
+    .th-sort-btn.active { color:#111827; border-color:#9ca3af; background:#f9fafb; }
+    .dragging-row { opacity: .45; }
+    table thead th { background:#fafafa; position:sticky; top:0; z-index:1; }
+    tbody tr:nth-child(odd) { background:#fcfdff; }
+    .m-row { display:none; }
+    .m-name { font-size:11px; font-weight:600; line-height:1.2; }
+    .m-col { text-align:right; }
+    .m-main { font-size:11px; font-weight:600; }
+    .m-sub { font-size:10px; color:#8b95a7; }
+    .modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50; }
+    .modal { width:min(520px,92vw); background:#fff; border-radius:12px; padding:12px; }
+    .modal-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .modal-grid > div { min-width:0; }
+    .modal-grid input, .modal-grid select { width:100%; color:#1f2329 !important; background:#fff !important; }
+    #group, #dcaCycle { color:#1f2329 !important; background:#fff !important; }
+    #dcaCycle option { color:#1f2329; }
+    .modal-grid input:-webkit-autofill,
+    .modal-grid input:-webkit-autofill:hover,
+    .modal-grid input:-webkit-autofill:focus,
+    .modal-grid select:-webkit-autofill {
+      -webkit-text-fill-color:#1f2329;
+      -webkit-box-shadow: 0 0 0px 1000px #fff inset;
+      transition: background-color 9999s ease-out 0s;
+    }
+    .search-wrap { position: relative; }
+    .search-dropdown { position:absolute; top:100%; left:0; right:0; z-index:80; background:#fff; border:1px solid #e5e7eb; border-radius:8px; margin-top:4px; max-height:220px; overflow:auto; box-shadow:0 8px 20px rgba(0,0,0,.12); }
+    .search-item { padding:8px 10px; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+    .search-item:last-child { border-bottom:none; }
+    .search-item:hover { background:#f8fafc; }
+
+    /* mobile */
+    .mobile-only { display:none !important; }
+    @media (max-width: 768px) {
+      html, body { overflow-x: hidden !important; }
+      body { margin: 4px; }
+      .desktop-only { display:none !important; }
+      .mobile-only { display:block !important; }
+      .m-row { display:grid; grid-template-columns: 1.75fr .70fr .78fr .78fr; gap:2px; align-items:center; padding:6px 0; border-bottom:1px solid #eef2f7; }
+      .card { padding: 6px; margin-bottom: 8px; }
+      h2 { font-size: 14px; margin: 0; }
+
+      .row { gap:6px; }
+      .fund-toolbar { gap:4px; }
+      .fund-actions { gap:3px; }
+      .fund-actions button { padding:5px 7px; font-size:11px; }
+      input { min-width: 0 !important; box-sizing: border-box; }
+      .compact-input { width: calc(50% - 6px); min-width: calc(50% - 6px) !important; }
+      .compact-input.name { width: calc(50% - 6px); min-width: calc(50% - 6px) !important; }
+      .row.nowrap { display:flex; flex-wrap:nowrap; }
+      .status-row { display:block; }
+      .summary-grid { grid-template-columns: 1fr 1fr; }
+      .summary-item b { font-size: 12px; }
+
+      #mobileList { display:block !important; }
+      #pcTable { display:none; }
+      table { font-size: 11px; table-layout: fixed; width: 100%; }
+      th,td { padding: 6px 2px; }
+      td:first-child, th:first-child { width: 34%; }
+      td { word-break: break-word; }
+
+      #sumMarket, #sumCost, #sumPnl, #sumDay, #sumRate { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="loginCard">
+    <h3>账号登录（云端同步）</h3>
+    <div class="row">
+      <input id="email" placeholder="邮箱（如 you@example.com）" style="min-width:260px" />
+      <input id="password" placeholder="密码" type="password" style="min-width:180px" />
+      <button onclick="login()">登录/注册</button>
+      <button class="secondary" onclick="logout()">退出</button>
+      <span class="muted" id="userState">当前：本地模式</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="topbar" style="margin-bottom:8px;">
+      <h3 style="margin:0;">总览</h3>
+      <div id="accountMini" style="display:none; position:relative;">
+        <button class="avatar" id="avatarBtn" onclick="toggleAccountMenu()">U</button>
+        <div id="accountMenu" class="account-menu" style="display:none;">
+          <div class="muted" id="miniEmail">-</div>
+          <button class="secondary" style="margin-top:8px; width:100%;" onclick="logout()">退出登录</button>
+        </div>
+      </div>
+    </div>
+    <div class="status-row" style="margin-bottom:8px;">
+      <span class="muted" id="status"></span>
+    </div>
+    <div class="summary-grid" style="margin-bottom:10px;">
+      <div class="summary-item"><span class="muted">总市值</span><b id="sumMarket">-</b></div>
+      <div class="summary-item"><span class="muted">总成本</span><b id="sumCost">-</b></div>
+      <div class="summary-item"><span class="muted">总盈亏</span><b id="sumPnl">-</b></div>
+      <div class="summary-item"><span class="muted">当日盈亏</span><b id="sumDay">-</b></div>
+      <div class="summary-item"><span class="muted">总收益率</span><b id="sumRate">-</b></div>
+      <div class="summary-item"><span class="muted">每日定投</span><b id="sumDailyDca">-</b></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="fund-toolbar" style="margin-bottom:8px;">
+      <h3 style="margin:0;">基金明细</h3>
+      <div class="fund-actions">
+        <button class="secondary" onclick="openAddModal()" id="addToggleBtn">添加基金</button>
+        <button onclick="refreshAll()">刷新</button>
+      </div>
+    </div>
+    <div id="mobileList" class="mobile-only" style="display:none;">
+      <div class="m-row" style="font-weight:600; background:#fafafa; border-top:1px solid #eef2f7;">
+        <div class="m-name">基金信息</div>
+        <div class="m-col"><div class="m-main">总市值</div></div>
+        <div class="m-col"><div class="m-main">最新收益</div><div class="m-sub">最新收益率</div></div>
+        <div class="m-col"><div class="m-main">持仓收益</div><div class="m-sub">持仓收益率</div></div>
+      </div>
+      <div id="mobileBody"></div>
+    </div>
+    <table id="pcTable">
+      <thead>
+        <tr>
+          <th>移动 <button class="th-sort-btn" data-sort="order" onclick="setSort('order');return false;">↕</button></th>
+          <th>分组 <button class="th-sort-btn" data-sort="group" onclick="setSort('group');return false;">↕</button></th>
+          <th>基金 <button class="th-sort-btn" data-sort="name" onclick="setSort('name');return false;">↕</button></th>
+          <th class="desktop-only">总市值 <button class="th-sort-btn" data-sort="market" onclick="setSort('market');return false;">↕</button></th>
+          <th class="desktop-only">最新收益 <button class="th-sort-btn" data-sort="latest" onclick="setSort('latest');return false;">↕</button></th>
+          <th class="desktop-only">最新收益率 <button class="th-sort-btn" data-sort="latestRate" onclick="setSort('latestRate');return false;">↕</button></th>
+          <th class="desktop-only">持仓收益 <button class="th-sort-btn" data-sort="pnl" onclick="setSort('pnl');return false;">↕</button></th>
+          <th class="desktop-only">持仓收益率 <button class="th-sort-btn" data-sort="pnlRate" onclick="setSort('pnlRate');return false;">↕</button></th>
+          <th class="desktop-only">定投 <button class="th-sort-btn" data-sort="dca" onclick="setSort('dca');return false;">↕</button></th>
+          <th class="desktop-only">市值占比 <button class="th-sort-btn" data-sort="weight" onclick="setSort('weight');return false;">↕</button></th>
+          <th class="desktop-only">更新时间 <button class="th-sort-btn" data-sort="time" onclick="setSort('time');return false;">↕</button></th>
+          <th class="desktop-only">操作 <button class="th-sort-btn" data-sort="order" onclick="setSort('order');return false;">↕</button></th>
+        </tr>
+      </thead>
+      <tbody id="tb" ondragover="onRowDragOver(event)" ondrop="onBodyDrop(event)"></tbody>
+    </table>
+  </div>
+
+  <div class="modal-mask" id="fundModalMask">
+    <div class="modal">
+      <div class="row nowrap" style="justify-content:space-between; margin-bottom:8px;">
+        <h3 id="fundModalTitle" style="margin:0;">添加基金</h3>
+        <button class="secondary" id="fundModalCloseBtn" onclick="closeFundModal()">关闭</button>
+      </div>
+      <div class="modal-grid">
+        <div>
+          <div class="muted" style="margin-bottom:4px;">基金代码</div>
+          <input id="code" placeholder="" />
+        </div>
+        <div class="search-wrap">
+          <div class="muted" style="margin-bottom:4px;">基金名称</div>
+          <input id="name" placeholder="" autocomplete="off" />
+          <div id="nameDropdown" class="search-dropdown" style="display:none;"></div>
+        </div>
+        <div>
+          <div class="muted" style="margin-bottom:4px;">分组</div>
+          <input id="group" placeholder="" />
+        </div>
+        <div>
+          <div class="muted" id="sharesLabel" style="margin-bottom:4px;">持有份额</div>
+          <input id="shares" placeholder="" type="number" />
+        </div>
+        <div id="costWrap" class="desktop-only">
+          <div class="muted" style="margin-bottom:4px;">持仓成本</div>
+          <input id="cost" placeholder="" type="number" />
+        </div>
+        <div>
+          <div class="muted" style="margin-bottom:4px;">定投金额</div>
+          <input id="dcaAmount" placeholder="" type="number" />
+        </div>
+        <div>
+          <div class="muted" style="margin-bottom:4px;">定投周期</div>
+          <select id="dcaCycle">
+            <option value=""></option>
+            <option value="day">每日</option>
+            <option value="week">每周</option>
+            <option value="month">每月</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="justify-content:flex-end; margin-top:10px;">
+        <button onclick="saveFundModal()" id="fundModalSaveBtn">确认添加</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const KEY='fund_positions_v3';
+const TOKEN_KEY='fund_token_v1';
+const API_BASE=location.origin; // 同域后端
+let positions=[];
+let token=localStorage.getItem(TOKEN_KEY)||'';
+let uiBusy=false;
+let currentEmail='';
+let editingCode='';
+let lastRefreshAt=0;
+const AUTO_REFRESH_MIN_GAP_MS = 8000;
+let searchTimer = null;
+let draggingCode = '';
+let dropIndex = -1;
+const estimateCache = {};
+const sortState = { key: 'order', dir: 'asc' };
+
+function fmt(n,d=2){if(n===undefined||n===null||isNaN(Number(n))) return '-'; return Number(n).toFixed(d)}
+function cls(n){return Number(n)>=0?'up':'down'}
+function setStatus(t){document.getElementById('status').textContent=t}
+function cloudMode(){ return !!API_BASE; }
+function isModalOpen(){ return document.getElementById('fundModalMask')?.style.display === 'flex'; }
+function cycleDays(c){ return c==='day' ? 1 : (c==='week' ? 7 : (c==='month' ? 30 : 0)); }
+function cycleZh(c){ return c==='day' ? '每日' : (c==='week' ? '每周' : (c==='month' ? '每月' : '-')); }
+function isMobileView(){ return window.matchMedia('(max-width: 768px)').matches; }
+function openAddModal(){
+  editingCode='';
+  const mobile = isMobileView();
+  document.getElementById('fundModalTitle').textContent='添加基金';
+  document.getElementById('fundModalSaveBtn').textContent='确认添加';
+  document.getElementById('sharesLabel').textContent = mobile ? '持有份额' : '持有金额（市值）';
+  document.getElementById('costWrap').style.display = mobile ? 'none' : 'block';
+  ['code','name','group','shares','cost','dcaAmount'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('dcaCycle').value='';
+  document.getElementById('fundModalMask').style.display='flex';
+}
+function openEditModal(code){
+  const p=positions.find(x=>x.code===code); if(!p) return;
+  editingCode=code;
+  document.getElementById('fundModalTitle').textContent='编辑基金';
+  document.getElementById('fundModalSaveBtn').textContent='保存修改';
+  const mobile = isMobileView();
+  document.getElementById('costWrap').style.display = mobile ? 'none' : 'block';
+  document.getElementById('sharesLabel').textContent = '持有份额';
+  document.getElementById('shares').placeholder = '持有份额';
+  document.getElementById('cost').placeholder='持仓成本';
+  document.getElementById('code').value=p.code||'';
+  document.getElementById('name').value=p.name||'';
+  document.getElementById('group').value=p.group||'';
+  document.getElementById('shares').value=Number(p.shares||0);
+  document.getElementById('cost').value=Number(p.cost||0);
+  document.getElementById('dcaAmount').value=Number(p.dcaAmount||0);
+  document.getElementById('dcaCycle').value=p.dcaCycle||'';
+  document.getElementById('fundModalMask').style.display='flex';
+}
+function closeFundModal(){
+  document.getElementById('fundModalMask').style.display='none';
+  hideNameDropdown();
+}
+
+function hideNameDropdown(){
+  const dd=document.getElementById('nameDropdown');
+  dd.style.display='none';
+  dd.innerHTML='';
+}
+
+async function searchFundByName(q){
+  try{
+    const data=await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
+    return data?.list || [];
+  }catch{
+    return [];
+  }
+}
+
+function renderNameDropdown(list){
+  const dd=document.getElementById('nameDropdown');
+  if(!list.length){ hideNameDropdown(); return; }
+  dd.innerHTML = list.map(item=>`<div class="search-item" data-code="${item.code}" data-name="${item.name}"><b>${item.name}</b><div class="muted">${item.code}${item.type?` · ${item.type}`:''}</div></div>`).join('');
+  dd.style.display='block';
+}
+async function saveFundModal(){
+  if(editingCode) return updateFund();
+  return addFund();
+}
+function toggleAccountMenu(){
+  const el=document.getElementById('accountMenu');
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+function setUserState(){
+  const logged = cloudMode() && !!token;
+  document.getElementById('userState').textContent = cloudMode() ? (logged ? '当前：云端已登录' : '当前：云端未登录') : '当前：本地模式';
+  document.getElementById('loginCard').style.display = logged ? 'none' : 'block';
+  document.getElementById('accountMini').style.display = logged ? 'block' : 'none';
+  const avatar=document.getElementById('avatarBtn');
+  const miniEmail=document.getElementById('miniEmail');
+  if(logged){
+    const t=(currentEmail||'U').trim();
+    avatar.textContent=(t[0]||'U').toUpperCase();
+    miniEmail.textContent=currentEmail||'已登录';
+  }
+}
+function setBusy(flag){
+  uiBusy=flag;
+  document.querySelectorAll('button').forEach(b=>{
+    // 保持核心交互按钮可点，避免出现“没反应”
+    if(
+      b.id === 'fundModalCloseBtn' ||
+      b.id === 'fundModalSaveBtn' ||
+      b.id === 'addToggleBtn' ||
+      b.classList.contains('th-sort-btn')
+    ) return;
+    b.disabled=flag;
+  });
+  if(flag) setStatus('处理中...');
+}
+async function withBusy(fn){
+  if(uiBusy && !isModalOpen()){
+    setStatus('系统忙碌中，请稍后1秒再试');
+    return;
+  }
+  // 弹窗打开时允许提交，与后台刷新并行，避免“保存没反应”
+  if(uiBusy && isModalOpen()){
+    setStatus('后台刷新中，正在提交...');
+    return await fn();
+  }
+  setBusy(true);
+  try{return await fn();}
+  finally{setBusy(false);}
+}
+
+async function apiFetch(path, options={}){
+  let retried=false;
+  while(true){
+    try{
+      const headers={...(options.headers||{})};
+      if(token) headers.Authorization=`Bearer ${token}`;
+      if(options.body && !headers['Content-Type']) headers['Content-Type']='application/json';
+      const ctl = new AbortController();
+      const timer = setTimeout(()=>ctl.abort(), 12000);
+      const res=await fetch(`${API_BASE}${path}`, {...options, headers: { ...headers, "Bypass-Tunnel-Reminder": "true" }, signal: ctl.signal});
+      clearTimeout(timer);
+      if(res.status===401){
+        token=''; localStorage.removeItem(TOKEN_KEY); setUserState();
+        throw new Error('登录已过期，请重新登录');
+      }
+      if(!res.ok){
+        const txt=await res.text();
+        throw new Error(txt || `请求失败(${res.status})`);
+      }
+      const ct=res.headers.get('content-type')||'';
+      return ct.includes('application/json') ? await res.json() : await res.text();
+    }catch(e){
+      if(!retried){ retried=true; await new Promise(r=>setTimeout(r,400)); continue; }
+      throw e;
+    }
+  }
+}
+
+async function login(){
+  return withBusy(async()=>{
+    if(!cloudMode()) return alert('当前是本地模式，部署后端后再登录');
+    const email=document.getElementById('email').value.trim();
+    const password=document.getElementById('password').value;
+    if(!email || !password) return alert('请填写邮箱和密码');
+    try{
+      const data=await apiFetch('/auth/login',{method:'POST',body:JSON.stringify({email,password})});
+      token=data.token||'';
+      currentEmail=email;
+      localStorage.setItem(TOKEN_KEY,token);
+      localStorage.setItem('fund_email_v1', currentEmail);
+      setUserState();
+      try{
+        positions=await dataStore.list();
+      }catch(e){
+        setStatus('登录成功，但拉取持仓失败，请点刷新重试');
+      }
+      render();
+      alert('登录成功');
+    }catch(e){
+      alert('登录失败：'+e.message);
+    }
+  });
+}
+
+function logout(){ token=''; currentEmail=''; localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('fund_email_v1'); setUserState(); alert('已退出登录'); }
+
+const dataStore = {
+  async list(){
+    if(cloudMode()){
+      if(!token) return [];
+      const d=await apiFetch('/positions');
+      return d.list||[];
+    }
+    return JSON.parse(localStorage.getItem(KEY)||'[]');
+  },
+  async create(item){
+    if(cloudMode()) return await apiFetch('/positions',{method:'POST',body:JSON.stringify(item)});
+    const list=JSON.parse(localStorage.getItem(KEY)||'[]');
+    list.push(item);
+    localStorage.setItem(KEY,JSON.stringify(list));
+    return item;
+  },
+  async update(row, patch){
+    if(cloudMode()) return await apiFetch(`/positions/${encodeURIComponent(row.id)}`,{method:'PUT',body:JSON.stringify(patch)});
+    const list=JSON.parse(localStorage.getItem(KEY)||'[]');
+    const i=list.findIndex(x=>x.code===row.code);
+    if(i>=0){ list[i]={...list[i],...patch}; localStorage.setItem(KEY,JSON.stringify(list)); }
+    return list[i];
+  },
+  async remove(row){
+    if(cloudMode()) return await apiFetch(`/positions/${encodeURIComponent(row.id)}`,{method:'DELETE'});
+    const list=JSON.parse(localStorage.getItem(KEY)||'[]').filter(x=>x.code!==row.code);
+    localStorage.setItem(KEY,JSON.stringify(list));
+  }
+};
+
+async function fetchEstimate(code){
+  if(!/^\d{6}$/.test(code)) throw new Error('代码需6位');
+
+  function normalizeEstimate(data){
+    if(!data || typeof data !== 'object') return null;
+    const hasPrice = Number(data.gsz) > 0 || Number(data.dwjz) > 0;
+    const hasName = typeof data.name === 'string' && data.name.trim().length > 0;
+    if(!hasPrice && !hasName) return null;
+    return data;
+  }
+
+  // 优先走同域后端接口（适配飞书内置浏览器/移动端限制）
+  try{
+    const r = await fetch(`${API_BASE}/api/estimate?code=${code}`);
+    if(r.ok){
+      const data = normalizeEstimate(await r.json());
+      if(data) return data;
+    }
+  }catch{}
+
+  // 兜底：JSONP
+  const data = await new Promise((resolve,reject)=>{
+    const old = window.jsonpgz;
+    const timeout=setTimeout(()=>{ cleanup(); reject(new Error('估值获取失败，请稍后重试')); },10000);
+    function cleanup(){ clearTimeout(timeout); window.jsonpgz = old; if(script && script.parentNode) script.parentNode.removeChild(script); }
+    window.jsonpgz=(payload)=>{ cleanup(); resolve(payload); };
+    const script=document.createElement('script');
+    script.src=`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`;
+    script.onerror=()=>{ cleanup(); reject(new Error('估值获取失败，请稍后重试')); };
+    document.body.appendChild(script);
+  });
+
+  const normalized = normalizeEstimate(data);
+  if(!normalized) throw new Error('该基金暂无实时估值或代码不存在');
+  return normalized;
+}
+
+async function addFund(){
+  return withBusy(async()=>{
+    if(cloudMode() && !token) return alert('请先登录，再进行云端同步操作');
+    const code=document.getElementById('code').value.trim();
+    const nameInput=document.getElementById('name').value.trim();
+    const groupInput=document.getElementById('group').value.trim();
+    const inputAmountOrShares=Number(document.getElementById('shares').value||0);
+    const cost=Number(document.getElementById('cost').value||0);
+    const dcaAmount=Number(document.getElementById('dcaAmount').value||0);
+    const dcaCycle=document.getElementById('dcaCycle').value;
+    const mobile = isMobileView();
+    if(!/^\d{6}$/.test(code)) return alert('请输入6位基金代码');
+    if(!(inputAmountOrShares>0)) return alert(mobile ? '请填写有效持有份额' : '请填写有效持有金额');
+    if(!mobile && !(cost>0)) return alert('请填写持仓成本');
+    if(positions.some(p=>p.code===code)) return alert('该基金已存在');
+    try{
+      const e=await fetchEstimate(code);
+      const price = Number((e && e.gsz) || 0);
+      if(!mobile && !(price>0)) return alert('当前估值不可用，无法按持有金额换算份额');
+      const shares = mobile ? inputAmountOrShares : (price>0 ? inputAmountOrShares / price : 0);
+      const nextOrder = positions.reduce((m,r)=>Math.max(m, Number(r.order||0)),0) + 1;
+      const row={
+        code,
+        name:nameInput || ((e && e.name) ? e.name : code),
+        group: groupInput || '',
+        order: nextOrder,
+        shares,
+        cost: (cost>0 ? cost : shares * Number((e && e.gsz) || 0)),
+        estimate:e,
+        dcaAmount: dcaAmount>0 ? dcaAmount : 0,
+        dcaCycle: dcaAmount>0 ? dcaCycle : '',
+        dcaLastAt: dcaAmount>0 && dcaCycle ? new Date().toISOString() : ''
+      };
+      const created=await dataStore.create(row);
+      positions.push(created || row);
+      if(e) estimateCache[code] = e;
+      // 回读并校验分组首保存
+      const ok = await ensureGroupSaved((created||row).id, row.group || '');
+      closeFundModal();
+      // 每次新增后自动刷新全量数据
+      await refreshAllCore();
+      setStatus(ok ? '添加成功，数据已自动刷新' : '添加成功，分组保存已自动重试');
+    }catch(err){
+      alert('获取基金失败：'+err.message);
+    }
+  });
+}
+
+async function removeFund(code){
+  return withBusy(async()=>{
+    if(cloudMode() && !token) return alert('请先登录，再进行云端同步操作');
+    if(!confirm('确认删除?')) return;
+    const row=positions.find(x=>x.code===code);
+    if(!row) return;
+    try{
+      await dataStore.remove(row);
+      positions=positions.filter(x=>x.code!==code);
+      await normalizeOrderIfNeeded();
+      render();
+      setStatus('删除成功');
+    }catch(e){
+      alert('删除失败：'+e.message);
+    }
+  });
+}
+
+async function updateFund(){
+  return withBusy(async()=>{
+    if(cloudMode() && !token) return alert('请先登录，再进行云端同步操作');
+    const p=positions.find(x=>x.code===editingCode); if(!p) return;
+    const nameInput=document.getElementById('name').value.trim();
+    const groupInput=document.getElementById('group').value.trim();
+    const holdAmount=Number(document.getElementById('shares').value||0);
+    const holdCost=Number(document.getElementById('cost').value||0);
+    const mobile = isMobileView();
+    const dcaAmount=Number(document.getElementById('dcaAmount').value||0);
+    const dcaCycle=document.getElementById('dcaCycle').value;
+
+    if(!(holdAmount>0)) return alert('请填写持有份额');
+
+    const shares = holdAmount;
+    let nextCost = holdCost>0 ? holdCost : Number(p.cost||0);
+    if(mobile){
+      // 移动端不改成本
+      nextCost = Number(p.cost||0);
+    }
+
+    // 先本地生效（立即可见）
+    p.name=nameInput || p.name;
+    p.group=groupInput || '';
+    p.shares=shares;
+    p.cost=nextCost;
+    p.dcaAmount=dcaAmount>0?dcaAmount:0;
+    p.dcaCycle=dcaAmount>0?dcaCycle:'';
+    if(!p.dcaLastAt && p.dcaAmount>0 && p.dcaCycle) p.dcaLastAt=new Date().toISOString();
+
+    closeFundModal();
+    render();
+    setStatus('已保存，后台同步中...');
+
+    try{
+      const patch={name:p.name,group:p.group,shares:p.shares,cost:p.cost,dcaAmount:p.dcaAmount,dcaCycle:p.dcaCycle,dcaLastAt:p.dcaLastAt||''};
+      if(cloudMode() && token){
+        const saved = await apiFetch(`/positions/${encodeURIComponent(p.id)}`,{method:'PUT',body:JSON.stringify(patch)});
+        Object.assign(p, saved || {});
+      }else{
+        await dataStore.update(p, patch);
+      }
+      setStatus('修改成功');
+    }catch(e){
+      setStatus('保存失败，已回滚请重试');
+      alert('保存失败：'+e.message);
+    }
+  });
+}
+
+async function refreshOne(code, { renderNow = true, persistNow = true } = {}){
+  const p=positions.find(x=>x.code===code); if(!p) return;
+  try{
+    p.estimate=await fetchEstimate(code);
+    estimateCache[code] = p.estimate;
+    if(!p.name||p.name===p.code) p.name=(p.estimate && p.estimate.name) ? p.estimate.name : p.name;
+    if(persistNow && (!cloudMode() || token)) await dataStore.update(p,{estimate:p.estimate,name:p.name});
+  }catch(e){ p.estimate={error:e.message}; }
+  if(renderNow) render();
+}
+
+async function applyDcaForPosition(p){
+  const amount = Number(p.dcaAmount||0);
+  const days = cycleDays(p.dcaCycle);
+  if(!(amount>0) || !days) return false;
+
+  if(!p.dcaLastAt){
+    p.dcaLastAt = new Date().toISOString();
+    await dataStore.update(p,{ dcaLastAt:p.dcaLastAt, dcaAmount:amount, dcaCycle:p.dcaCycle });
+    return false;
+  }
+
+  const last = new Date(p.dcaLastAt).getTime();
+  const now = Date.now();
+  const diffDays = Math.floor((now - last) / 86400000);
+  const periods = Math.floor(diffDays / days);
+  if(periods<=0) return false;
+
+  if(!p.estimate || !Number(p.estimate.gsz)) p.estimate = await fetchEstimate(p.code);
+  const price = Number(p.estimate.gsz);
+  if(!(price>0)) return false;
+
+  const invest = amount * periods;
+  const addShares = invest / price;
+  p.shares = Number(p.shares||0) + addShares;
+  p.cost = Number(p.cost||0) + invest;
+  p.dcaLastAt = new Date(last + periods * days * 86400000).toISOString();
+
+  await dataStore.update(p,{ shares:p.shares, cost:p.cost, dcaLastAt:p.dcaLastAt, dcaAmount:amount, dcaCycle:p.dcaCycle });
+  return true;
+}
+
+async function applyDcaAll(){
+  let changed = 0;
+  for(const p of positions){ if(await applyDcaForPosition(p)) changed++; }
+  if(changed>0) setStatus(`已自动补记定投 ${changed} 只`);
+}
+
+async function refreshAllCore(){
+  setStatus('刷新中...');
+
+  // 估值并发刷新（显著提速）
+  const targets = positions.map(p=>p.code);
+  await Promise.allSettled(targets.map(code => refreshOne(code, { renderNow:false, persistNow:false })));
+
+  // 一次性渲染
+  render();
+
+  // 后台异步持久化估值（不阻塞前台）
+  Promise.allSettled(
+    positions.map(p => ((!cloudMode() || token) ? dataStore.update(p,{estimate:p.estimate,name:p.name}) : Promise.resolve()))
+  ).catch(()=>{});
+
+  await applyDcaAll();
+  render();
+  const now = new Date();
+  lastRefreshAt = Date.now();
+  setStatus('更新时间：'+ now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0'));
+}
+
+async function refreshAll(){
+  return withBusy(async()=>{
+    await refreshAllCore();
+  });
+}
+
+function shouldAutoRefresh(){
+  if(uiBusy) return false;
+  if(document.hidden) return false;
+  if(isModalOpen()) return false; // 编辑/新增弹窗打开时禁止抢占式刷新
+  return (Date.now() - lastRefreshAt) >= AUTO_REFRESH_MIN_GAP_MS;
+}
+
+async function refreshOnEnter(){
+  if(!shouldAutoRefresh()) return;
+  try{ await refreshAll(); }catch{}
+}
+
+function hydrateEstimatesFromCache(){
+  positions.forEach(p=>{ if(!p.estimate && estimateCache[p.code]) p.estimate = estimateCache[p.code]; });
+}
+
+async function ensureGroupSaved(rowId, targetGroup){
+  const target = String(targetGroup || '');
+  let fresh = await dataStore.list();
+  let hit = fresh.find(x => x.id === rowId);
+  if(hit && String(hit.group||'') === target){
+    positions = fresh;
+    hydrateEstimatesFromCache();
+    return true;
+  }
+  // 自动重试一次，避免出现“第一次没反应”
+  if(hit){
+    await apiFetch(`/positions/${encodeURIComponent(rowId)}`, { method:'PUT', body: JSON.stringify({ group: target }) });
+  }
+  fresh = await dataStore.list();
+  hit = fresh.find(x => x.id === rowId);
+  positions = fresh;
+  hydrateEstimatesFromCache();
+  return !!(hit && String(hit.group||'') === target);
+}
+
+function getSortValue(p, key){
+  const e = p.estimate || {};
+  const gsz = Number(e.gsz || 0);
+  const dwjz = Number(e.dwjz || 0);
+  const mv = gsz * Number(p.shares || 0);
+  const pnl = mv - Number(p.cost || 0);
+  const day = (gsz - dwjz) * Number(p.shares || 0);
+  const holdRate = Number(p.cost)>0 ? (pnl / Number(p.cost) * 100) : 0;
+  switch(key){
+    case 'group': return String(p.group || '');
+    case 'name': return String(p.name || '');
+    case 'market': return mv;
+    case 'latest': return day;
+    case 'latestRate': return Number(e.gszzl || 0);
+    case 'pnl': return pnl;
+    case 'pnlRate': return holdRate;
+    case 'dca': return Number(p.dcaAmount || 0);
+    case 'weight': return mv;
+    case 'time': return String(e.gztime || '');
+    case 'order':
+    default: return Number(p.order ?? 1e9);
+  }
+}
+
+function updateSortButtons(){
+  document.querySelectorAll('.th-sort-btn').forEach(btn=>{
+    const key = btn.dataset.sort || '';
+    const active = key === sortState.key;
+    btn.classList.toggle('active', active);
+    btn.textContent = active ? (sortState.dir === 'asc' ? '▲' : '▼') : '↕';
+  });
+}
+
+function setSort(key){
+  if(sortState.key === key){
+    sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+  }else{
+    sortState.key = key;
+    sortState.dir = 'asc';
+  }
+  updateSortButtons();
+  render();
+}
+
+function sortPositionsInPlace(){
+  const { key, dir } = sortState;
+  positions.sort((a,b)=>{
+    const va = getSortValue(a,key);
+    const vb = getSortValue(b,key);
+    let cmp = 0;
+    if(typeof va === 'string' || typeof vb === 'string') cmp = String(va).localeCompare(String(vb));
+    else cmp = Number(va) - Number(vb);
+    if(cmp === 0) cmp = Number(a.order ?? 1e9) - Number(b.order ?? 1e9);
+    return dir === 'asc' ? cmp : -cmp;
+  });
+}
+
+async function normalizeOrderIfNeeded(){
+  let changed=false;
+  sortPositionsInPlace();
+  positions.forEach((p,i)=>{ if(Number(p.order)!==i+1){ p.order=i+1; changed=true; } });
+  if(changed){
+    for(const p of positions){
+      try{ await dataStore.update(p,{order:p.order}); }catch{}
+    }
+  }
+}
+
+function applyOrderFromArray(){
+  positions.forEach((p,i)=>{ p.order = i + 1; });
+}
+
+async function persistCurrentOrder(){
+  applyOrderFromArray();
+  for(const p of positions){
+    await dataStore.update(p,{order:p.order});
+  }
+}
+
+function onRowDragStart(e, code){
+  draggingCode = code;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', code);
+  e.currentTarget.classList.add('dragging-row');
+}
+
+function onRowDragOver(e, targetCode){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const to = positions.findIndex(x=>x.code===targetCode);
+  if(to<0) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const dropAfter = (e.clientY - rect.top) > rect.height / 2;
+  dropIndex = dropAfter ? (to + 1) : to;
+}
+
+async function onBodyDrop(e){
+  e.preventDefault();
+  const code = draggingCode || e.dataTransfer.getData('text/plain');
+  if(!code) return;
+  const from = positions.findIndex(x=>x.code===code);
+  if(from<0) return;
+
+  let to = (dropIndex >= 0 ? dropIndex : positions.length);
+  const [moved] = positions.splice(from,1);
+  if(from < to) to = to - 1;
+  positions.splice(Math.max(0, Math.min(to, positions.length)), 0, moved);
+
+  applyOrderFromArray();
+  hydrateEstimatesFromCache();
+  render();
+  try{
+    setStatus('排序保存中...');
+    await persistCurrentOrder();
+    setStatus('排序已保存');
+  }catch{
+    setStatus('排序保存失败');
+  }
+}
+
+function onRowDragEnd(e){
+  draggingCode = '';
+  dropIndex = -1;
+  e.currentTarget.classList.remove('dragging-row');
+}
+
+function render(){
+  sortPositionsInPlace();
+  const tb=document.getElementById('tb');
+  const mobileBody=document.getElementById('mobileBody');
+
+  let sumMarket=0, sumCost=0, sumPnl=0, sumDay=0, sumDailyDca=0;
+
+  if(!positions.length){
+    tb.innerHTML='<tr><td colspan="12" class="muted">暂无持仓</td></tr>';
+    mobileBody.innerHTML='<div class="muted" style="padding:8px 0;">暂无持仓</div>';
+    document.getElementById('sumMarket').textContent='0.00';
+    document.getElementById('sumCost').textContent='0.00';
+    document.getElementById('sumPnl').textContent='0.00';
+    document.getElementById('sumDay').textContent='0.00';
+    document.getElementById('sumRate').textContent='0.00%';
+    document.getElementById('sumDailyDca').textContent='0.00';
+    return;
+  }
+
+  for(const p of positions){
+    const e=p.estimate||{};
+    const gsz=Number(e.gsz), dwjz=Number(e.dwjz);
+    const mv=gsz*Number(p.shares);
+    const pnl=mv-Number(p.cost);
+    const day=(gsz-dwjz)*Number(p.shares);
+    if(!Number.isNaN(mv)) sumMarket += mv;
+    if(!Number.isNaN(Number(p.cost))) sumCost += Number(p.cost);
+    if(!Number.isNaN(pnl)) sumPnl += pnl;
+    if(!Number.isNaN(day)) sumDay += day;
+    if((p.dcaCycle||'')==='day' && !Number.isNaN(Number(p.dcaAmount||0))) sumDailyDca += Number(p.dcaAmount||0);
+  }
+
+  mobileBody.innerHTML = positions.map(p=>{
+    const e=p.estimate||{};
+    const gsz=Number(e.gsz), dwjz=Number(e.dwjz);
+    const mv=gsz*Number(p.shares);
+    const pnl=mv-Number(p.cost);
+    const day=(gsz-dwjz)*Number(p.shares);
+    const holdRate = Number(p.cost)>0 ? (pnl/Number(p.cost)*100) : 0;
+    const dayRate = Number(e.gszzl||0);
+    return `<div class="m-row">
+      <div class="m-name">[${p.group||'-'}] ${p.name||'-'}<div class="muted">${p.code}</div></div>
+      <div class="m-col"><div class="m-main">${fmt(mv)}</div></div>
+      <div class="m-col"><div class="m-main ${cls(day)}">${fmt(day)}</div><div class="m-sub ${cls(dayRate)}">${fmt(dayRate,2)}%</div></div>
+      <div class="m-col"><div class="m-main ${cls(pnl)}">${fmt(pnl)}</div><div class="m-sub ${cls(holdRate)}">${fmt(holdRate,2)}%</div></div>
+    </div>`;
+  }).join('');
+
+  tb.innerHTML=positions.map(p=>{
+    const e=p.estimate||{};
+    const gsz=Number(e.gsz), dwjz=Number(e.dwjz), gszzl=Number(e.gszzl);
+    const mv=gsz*Number(p.shares);
+    const pnl=mv-Number(p.cost);
+    const day=(gsz-dwjz)*Number(p.shares);
+
+    const weight = sumMarket > 0 ? (mv / sumMarket * 100) : 0;
+    const holdRate = Number(p.cost)>0 ? (pnl/Number(p.cost)*100) : 0;
+    return `<tr ondragover="onRowDragOver(event,'${p.code}')" ondrop="onBodyDrop(event)" ondragend="onRowDragEnd(event)">
+      <td class="desktop-only"><span class="secondary drag-handle" draggable="true" ondragstart="onRowDragStart(event,'${p.code}')" title="按住拖动排序">↕</span></td>
+      <td>${p.group||'-'}</td>
+      <td><b>${p.name||'-'}</b><div class="muted">${p.code}</div></td>
+      <td class="desktop-only">${fmt(mv)}</td>
+      <td class="desktop-only ${cls(day)}">${fmt(day)}</td>
+      <td class="desktop-only ${cls(gszzl)}">${fmt(gszzl,2)}%</td>
+      <td class="desktop-only ${cls(pnl)}">${fmt(pnl)}</td>
+      <td class="desktop-only ${cls(holdRate)}">${fmt(holdRate,2)}%</td>
+      <td class="desktop-only">${p.dcaAmount>0 ? `${Math.round(Number(p.dcaAmount))}/${cycleZh(p.dcaCycle)}` : '-'}</td>
+      <td class="desktop-only">${fmt(weight,2)}%</td>
+      <td class="desktop-only">${e.gztime||'-'}</td>
+      <td class="desktop-only"><button class="secondary" onclick="openEditModal('${p.code}')">编辑</button> <button class="secondary" onclick="removeFund('${p.code}')">删除</button></td>
+    </tr>`;
+  }).join('');
+
+  const pnlEl = document.getElementById('sumPnl');
+  const dayEl = document.getElementById('sumDay');
+  const rateEl = document.getElementById('sumRate');
+  const sumRate = sumCost > 0 ? (sumPnl / sumCost * 100) : 0;
+  document.getElementById('sumMarket').textContent = fmt(sumMarket);
+  document.getElementById('sumCost').textContent = fmt(sumCost);
+  pnlEl.textContent = fmt(sumPnl);
+  dayEl.textContent = fmt(sumDay);
+  rateEl.textContent = `${fmt(sumRate,2)}%`;
+  document.getElementById('sumDailyDca').textContent = fmt(sumDailyDca);
+  pnlEl.className = cls(sumPnl);
+  dayEl.className = cls(sumDay);
+  rateEl.className = cls(sumRate);
+}
+
+(async function init(){
+  const nameInputEl=document.getElementById('name');
+  const dd=document.getElementById('nameDropdown');
+  nameInputEl.addEventListener('input', ()=>{
+    const q=nameInputEl.value.trim();
+    if(searchTimer) clearTimeout(searchTimer);
+    if(!q || q.length<2){ hideNameDropdown(); return; }
+    searchTimer=setTimeout(async()=>{
+      const list=await searchFundByName(q);
+      renderNameDropdown(list);
+    },250);
+  });
+
+  dd.addEventListener('click',(e)=>{
+    const item=e.target.closest('.search-item');
+    if(!item) return;
+    document.getElementById('code').value=item.dataset.code||'';
+    document.getElementById('name').value=item.dataset.name||'';
+    hideNameDropdown();
+  });
+
+  document.addEventListener('click',(e)=>{
+    if(!e.target.closest('.search-wrap')) hideNameDropdown();
+  });
+  currentEmail = localStorage.getItem('fund_email_v1') || '';
+  setUserState();
+  try{
+    positions = await dataStore.list();
+    hydrateEstimatesFromCache();
+    await normalizeOrderIfNeeded();
+  }catch(e){
+    setStatus('初始化失败：请检查网络或重新登录');
+    positions = [];
+  }
+  updateSortButtons();
+  render();
+  await refreshAll();
+
+  // 每次切回页面时自动刷新（前后台切换、App回前台、标签页聚焦）
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshOnEnter(); });
+  window.addEventListener('focus', refreshOnEnter);
+  window.addEventListener('pageshow', refreshOnEnter);
+})();
+</script>
+</body>
+</html>
