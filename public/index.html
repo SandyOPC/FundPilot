@@ -34,6 +34,8 @@
     .drag-handle { cursor: grab; font-weight:700; padding:6px 10px; display:inline-block; border:1px solid #d9dce1; border-radius:8px; background:#fff; color:#1f2329; user-select:none; }
     .th-sort-btn { padding:1px 6px; border:1px solid #e5e7eb; border-radius:999px; font-size:11px; line-height:1.2; background:#fff; color:#6b7280; vertical-align:middle; }
     .th-sort-btn.active { color:#111827; border-color:#9ca3af; background:#f9fafb; }
+    .m-sort-btn { padding:0 2px !important; border:none !important; background:transparent !important; color:#a1a1aa !important; }
+    .m-sort-btn.active { color:#2563eb !important; background:transparent !important; font-weight:bold; }
     .dragging-row { opacity: .45; }
     table thead th { background:#fafafa; position:sticky; top:0; z-index:1; }
     tbody tr:nth-child(odd) { background:#fcfdff; }
@@ -142,11 +144,21 @@
       </div>
     </div>
     <div id="mobileList" class="mobile-only" style="display:none;">
-      <div class="m-row" style="font-weight:600; background:#fafafa; border-top:1px solid #eef2f7;">
-        <div class="m-name">基金信息</div>
-        <div class="m-col"><div class="m-main">总市值</div></div>
-        <div class="m-col"><div class="m-main">最新收益</div><div class="m-sub">最新收益率</div></div>
-        <div class="m-col"><div class="m-main">持仓收益</div><div class="m-sub">持仓收益率</div></div>
+      <div class="m-row" style="font-weight:600; background:#fafafa; border-top:1px solid #eef2f7; color:#555;">
+        <div class="m-name" style="display:flex; align-items:center; gap:2px;">
+          基金信息 <button class="th-sort-btn m-sort-btn" data-sort="name" onclick="setSort('name');return false;">↕</button>
+        </div>
+        <div class="m-col"><div class="m-main" style="display:flex; align-items:center; justify-content:flex-end; gap:2px;">
+          总市值 <button class="th-sort-btn m-sort-btn" data-sort="market" onclick="setSort('market');return false;">↕</button>
+        </div></div>
+        <div class="m-col">
+          <div class="m-main" style="display:flex; align-items:center; justify-content:flex-end; gap:2px;">日盈 <button class="th-sort-btn m-sort-btn" data-sort="latest" onclick="setSort('latest');return false;">↕</button></div>
+          <div class="m-sub">日盈率</div>
+        </div>
+        <div class="m-col">
+          <div class="m-main" style="display:flex; align-items:center; justify-content:flex-end; gap:2px;">总盈 <button class="th-sort-btn m-sort-btn" data-sort="pnl" onclick="setSort('pnl');return false;">↕</button></div>
+          <div class="m-sub">总盈率</div>
+        </div>
       </div>
       <div id="mobileBody"></div>
     </div>
