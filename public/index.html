@@ -410,7 +410,7 @@ const dataStore = {
   async list(){
     if(cloudMode()){
       if(!token) return [];
-      const d=await apiFetch('/positions');
+      const d=await apiFetch('/positions?_t='+Date.now());
       return d.list||[];
     }
     return JSON.parse(localStorage.getItem(KEY)||'[]');
@@ -449,7 +449,7 @@ async function fetchEstimate(code){
 
   // 优先走同域后端接口（适配飞书内置浏览器/移动端限制）
   try{
-    const r = await fetch(`${API_BASE}/api/estimate?code=${code}`);
+    const r = await fetch(`${API_BASE}/api/estimate?code=${code}&_t=${Date.now()}`);
     if(r.ok){
       const data = normalizeEstimate(await r.json());
       if(data) return data;
