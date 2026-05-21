@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS public.positions (
     "order" INTEGER DEFAULT 0,
     shares NUMERIC DEFAULT 0,
     cost NUMERIC DEFAULT 0,
-    dcaAmount NUMERIC DEFAULT 0,
-    dcaCycle TEXT,
-    dcaLastAt TEXT,
-    updatedAt BIGINT
+    "dcaAmount" NUMERIC DEFAULT 0,
+    "dcaCycle" TEXT,
+    "dcaLastAt" TEXT,
+    "updatedAt" BIGINT
 );
 
 -- Optional: Enable Row Level Security (RLS) if needed
