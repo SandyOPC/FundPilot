@@ -1,0 +1,19 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # 每天 UTC 0点（北京时间早8点）运行一次，防止 Supabase 因为 7 天无活动被自动暂停
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit Supabase REST API
+        run: |
+          echo "Pinging Supabase to keep it alive..."
+          curl -sS -X GET 'https://xbymabfsrhqhgctyidju.supabase.co/rest/v1/positions?select=id&limit=1' \
+          -H "apikey: sb_publishable_rUdYgCevXg6FWfiXNFT9Mw_lYE63_Ia" \
+          -H "Authorization: Bearer sb_publishable_rUdYgCevXg6FWfiXNFT9Mw_lYE63_Ia"
+          echo -e "\nPing completed!"
