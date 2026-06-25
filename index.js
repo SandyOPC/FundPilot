@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 // 加载 .env 环境变量
 dotenv.config();
@@ -12,7 +13,8 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(new URL('./public', import.meta.url).pathname));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(__dirname, 'public')));
 
 const SECRET = process.env.JWT_SECRET || 'change-me-in-prod';
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -31,6 +33,54 @@ function auth(req, res, next) {
   }
 }
 
+async function getPersonalUser() {
+  const { data: positionOwners, error: ownerError } = await supabase
+    .from('positions')
+    .select('uid')
+    .limit(1000);
+  if (ownerError) throw ownerError;
+  const ownerCounts = new Map();
+  for (const row of positionOwners || []) {
+    if (!row.uid) continue;
+    ownerCounts.set(row.uid, (ownerCounts.get(row.uid) || 0) + 1);
+  }
+  const primaryUid = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (primaryUid) return { id: primaryUid, email: 'personal@fundpilot.local' };
+
+  const { data: users, error } = await supabase
+    .from('users')
+    .select('id,email')
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (error) throw error;
+  if (users && users.length > 0) return users[0];
+
+  const user = { id: nanoid(), email: 'personal@fundpilot.local', password: nanoid(18) };
+  const { error: insertError } = await supabase.from('users').insert([user]);
+  if (insertError) throw insertError;
+  return user;
+}
+
+async function personalAuth(req, res, next) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (token) {
+    try {
+      req.user = jwt.verify(token, SECRET);
+      return next();
+    } catch {
+      // 个人免登录模式下忽略过期/错误 token，继续使用默认个人账户。
+    }
+  }
+
+  try {
+    const user = await getPersonalUser();
+    req.user = { uid: user.id, email: user.email };
+    return next();
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'personal user unavailable' });
+  }
+}
+
 app.get('/health', (_, res) => res.json({ ok: true }));
 
 function parseJsonp(text) {
@@ -38,6 +88,38 @@ function parseJsonp(text) {
   const e = text.lastIndexOf(')');
   if (s < 0 || e < 0 || e <= s) throw new Error('invalid jsonp');
   return JSON.parse(text.slice(s + 1, e));
+}
+
+function normalizeFundgzData(data, code) {
+  if (!data || typeof data !== 'object') return null;
+  const hasPrice = Number(data.gsz) > 0 || Number(data.dwjz) > 0;
+  const hasName = typeof data.name === 'string' && data.name.trim().length > 0;
+  if (!hasPrice && !hasName) return null;
+  return {
+    ...data,
+    fundcode: data.fundcode || code,
+    source: 'fundgz'
+  };
+}
+
+async function fetchFundgzEstimate(code) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`, {
+      signal: ctl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36',
+        'Accept': '*/*',
+        'Referer': 'https://fund.eastmoney.com/'
+      }
+    });
+    if (!r.ok) return null;
+    const t = await r.text();
+    return normalizeFundgzData(parseJsonp(t), code);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function extractVar(text, varName) {
@@ -111,12 +193,8 @@ app.get('/api/estimate', async (req, res) => {
     const code = String(req.query.code || '').trim();
     if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid code' });
     try {
-      const r = await fetch(`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`);
-      if (r.ok) {
-        const t = await r.text();
-        const data = parseJsonp(t);
-        if (data && (Number(data.gsz) > 0 || data.name)) return res.json({ ...data, source: 'fundgz' });
-      }
+      const data = await fetchFundgzEstimate(code);
+      if (data) return res.json(data);
     } catch {}
     try {
       const dataLsjz = await fetchEastmoneyLsjzLatest(code);
@@ -167,7 +245,7 @@ app.post('/auth/login', async (req, res) => {
   res.json({ token });
 });
 
-app.get('/positions', auth, async (req, res) => {
+app.get('/positions', personalAuth, async (req, res) => {
   const { data: list, error } = await supabase
     .from('positions')
     .select('*')
@@ -179,7 +257,7 @@ app.get('/positions', auth, async (req, res) => {
   res.json({ list: list || [] });
 });
 
-app.post('/positions', auth, async (req, res) => {
+app.post('/positions', personalAuth, async (req, res) => {
   const { code, name, shares = 0, cost = 0, dcaAmount = 0, dcaCycle = '', dcaLastAt = '', group = '', order } = req.body || {};
   if (!/^\d{6}$/.test(code || '')) return res.status(400).json({ error: 'invalid code' });
   
@@ -206,7 +284,7 @@ app.post('/positions', auth, async (req, res) => {
   res.json(row);
 });
 
-app.put('/positions/:id', auth, async (req, res) => {
+app.put('/positions/:id', personalAuth, async (req, res) => {
   const { shares, cost, name, dcaAmount, dcaCycle, dcaLastAt, group, order } = req.body || {};
   const updates = { updatedAt: Date.now() };
   if (shares !== undefined) updates.shares = Number(shares);
@@ -230,7 +308,7 @@ app.put('/positions/:id', auth, async (req, res) => {
   res.json(data[0]);
 });
 
-app.delete('/positions/:id', auth, async (req, res) => {
+app.delete('/positions/:id', personalAuth, async (req, res) => {
   const { error } = await supabase
     .from('positions')
     .delete()
