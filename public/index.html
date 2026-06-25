@@ -2,12 +2,13 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
   <title>场外基金看板</title>
   <style>
     * { box-sizing: border-box; }
     html, body { width:100%; max-width:100%; overflow-x:hidden; }
-    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; margin: 0; padding: 8px; background: #f7f8fa; color: #1f2329; -webkit-text-size-adjust:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-y:auto; }
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; margin: 0; padding: 8px; background: #f7f8fa; color: #1f2329; -webkit-text-size-adjust:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-y:auto; overscroll-behavior-x:none; touch-action:pan-y; }
+    body.modal-open { position:fixed; left:0; right:0; width:100%; overflow:hidden; touch-action:none; }
     .card { background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.06); overflow-x:hidden; }
     .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
     .row.nowrap { flex-wrap: nowrap; }
@@ -44,6 +45,7 @@
     .m-col { text-align:right; }
     .m-main { font-size:11px; font-weight:600; }
     .m-sub { font-size:10px; color:#8b95a7; }
+    .m-card { display:none; }
     .modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50; }
     .modal { width:min(520px,92vw); background:#fff; border-radius:12px; padding:12px; }
     .modal-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -64,64 +66,75 @@
     .search-item { padding:8px 10px; cursor:pointer; border-bottom:1px solid #f1f5f9; }
     .search-item:last-child { border-bottom:none; }
     .search-item:hover { background:#f8fafc; }
+    #accountMini { display:none !important; }
 
     /* mobile */
     .mobile-only { display:none !important; }
     @media (max-width: 768px) {
-      html, body { overflow-x: hidden !important; }
-      body { margin: 4px; }
+      html, body { width:100% !important; max-width:100% !important; overflow-x:hidden !important; background:#f5f7fb; }
+      body { margin:0; padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
       .desktop-only { display:none !important; }
       .mobile-only { display:block !important; }
-      .m-row { display:grid; grid-template-columns: 1.75fr .70fr .78fr .78fr; gap:2px; align-items:center; padding:6px 0; border-bottom:1px solid #eef2f7; }
-      .card { padding: 6px; margin-bottom: 8px; }
-      h2 { font-size: 14px; margin: 0; }
+      body > * { max-width:100%; }
+      .card { width:100%; max-width:100%; padding:12px; margin:0 0 10px 0; border-radius:18px; box-shadow:0 6px 22px rgba(17,24,39,.06); overflow:hidden; }
+      h2, h3 { font-size:16px; margin:0; }
 
       .row { gap:6px; }
-      .fund-toolbar { gap:4px; }
-      .fund-actions { gap:3px; }
-      .fund-actions button { padding:5px 7px; font-size:11px; }
-      input { min-width: 0 !important; box-sizing: border-box; }
+      .topbar { margin-bottom:10px !important; }
+      .status-row { display:block; margin-bottom:10px !important; line-height:1.35; }
+      .fund-toolbar { gap:10px; align-items:center; }
+      .fund-actions { gap:8px; }
+      .fund-actions button { padding:9px 12px; min-height:38px; border-radius:999px; font-size:13px; font-weight:600; }
+      input, select, button { min-width: 0 !important; box-sizing: border-box; font-size:16px; }
       .compact-input { width: calc(50% - 6px); min-width: calc(50% - 6px) !important; }
       .compact-input.name { width: calc(50% - 6px); min-width: calc(50% - 6px) !important; }
       .row.nowrap { display:flex; flex-wrap:nowrap; }
-      .status-row { display:block; }
-      .summary-grid { grid-template-columns: repeat(3, 1fr); }
-      .summary-item { padding: 6px 4px; }
-      .summary-item b { font-size: 12px; }
+      .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; margin-bottom:2px !important; }
+      .summary-item { padding:10px; border-radius:14px; background:#f8fafc; min-width:0; }
+      .summary-item:first-child { grid-column:1 / -1; background:linear-gradient(135deg,#eff6ff,#f8fafc); border-color:#dbeafe; }
+      .summary-item span { font-size:11px; }
+      .summary-item b { font-size:15px; line-height:1.25; word-break:break-all; }
+      .summary-item:first-child b { font-size:22px; letter-spacing:-.02em; }
 
       #mobileList { display:block !important; }
+      #mobileList > .m-row { display:none !important; }
+      #mobileBody { display:grid; gap:10px; }
       #pcTable { display:none; }
       table { font-size: 11px; table-layout: fixed; width: 100%; }
       th,td { padding: 6px 2px; }
       td:first-child, th:first-child { width: 34%; }
       td { word-break: break-word; }
+      .m-card { display:block; width:100%; padding:12px; border:1px solid #edf0f5; border-radius:16px; background:#fff; box-shadow:0 4px 16px rgba(15,23,42,.04); text-align:left; color:inherit; }
+      .m-card:active { transform:scale(.995); background:#f8fafc; }
+      .m-card-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; margin-bottom:10px; }
+      .m-card-title { min-width:0; flex:1; }
+      .m-card-name { font-size:14px; font-weight:700; line-height:1.35; color:#111827; word-break:break-word; }
+      .m-card-meta { display:flex; align-items:center; gap:6px; margin-top:4px; color:#8b95a7; font-size:11px; }
+      .m-tag { display:inline-flex; max-width:92px; align-items:center; padding:2px 7px; border-radius:999px; background:#eef2ff; color:#4338ca; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .m-edit-hint { flex:0 0 auto; color:#a1a1aa; font-size:12px; padding-top:1px; }
+      .m-metrics { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; }
+      .m-metric { min-width:0; padding:8px; border-radius:12px; background:#f8fafc; }
+      .m-label { color:#8b95a7; font-size:11px; line-height:1.2; margin-bottom:3px; }
+      .m-value { font-size:15px; font-weight:700; line-height:1.2; word-break:break-all; }
+      .m-value.small { font-size:13px; }
+      .m-time { margin-top:9px; color:#9ca3af; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .modal-mask { align-items:flex-end; justify-content:center; padding:0; }
+      .modal { width:100%; max-width:100%; max-height:92vh; overflow-y:auto; border-radius:20px 20px 0 0; padding:16px 14px calc(16px + env(safe-area-inset-bottom)); box-shadow:0 -10px 30px rgba(15,23,42,.16); }
+      .modal-grid { grid-template-columns:1fr; gap:10px; }
+      .modal-grid input, .modal-grid select { height:44px; }
+      #fundModalCloseBtn, #fundModalSaveBtn { min-height:42px; padding:10px 14px; border-radius:12px; }
+      #fundModalSaveBtn { width:100%; }
+      .search-dropdown { max-height:260px; }
 
       #sumMarket, #sumCost, #sumPnl, #sumDay, #sumRate { font-size: 12px; }
+      #sumMarket { font-size:22px; }
     }
   </style>
 </head>
 <body>
-  <div class="card" id="loginCard">
-    <h3>账号登录（云端同步）</h3>
-    <div class="row">
-      <input id="email" placeholder="邮箱（如 you@example.com）" style="min-width:260px" />
-      <input id="password" placeholder="密码" type="password" style="min-width:180px" />
-      <button onclick="login()">登录/注册</button>
-      <button class="secondary" onclick="logout()">退出</button>
-      <span class="muted" id="userState">当前：本地模式</span>
-    </div>
-  </div>
-
   <div class="card">
     <div class="topbar" style="margin-bottom:8px;">
       <h3 style="margin:0;">总览</h3>
-      <div id="accountMini" style="display:none; position:relative;">
-        <button class="avatar" id="avatarBtn" onclick="toggleAccountMenu()">U</button>
-        <div id="accountMenu" class="account-menu" style="display:none;">
-          <div class="muted" id="miniEmail">-</div>
-          <button class="secondary" style="margin-top:8px; width:100%;" onclick="logout()">退出登录</button>
-        </div>
-      </div>
     </div>
     <div class="status-row" style="margin-bottom:8px;">
       <span class="muted" id="status"></span>
@@ -246,17 +259,25 @@ const AUTO_REFRESH_MIN_GAP_MS = 8000;
 let searchTimer = null;
 let draggingCode = '';
 let dropIndex = -1;
+let modalScrollY = 0;
 const estimateCache = {};
 const sortState = { key: 'order', dir: 'asc' };
 
 function fmt(n,d=2){if(n===undefined||n===null||isNaN(Number(n))) return '-'; return Number(n).toFixed(d)}
 function cls(n){return Number(n)>=0?'up':'down'}
+function esc(s){return String(s ?? '').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));}
 function setStatus(t){document.getElementById('status').textContent=t}
 function cloudMode(){ return !!API_BASE; }
 function isModalOpen(){ return document.getElementById('fundModalMask')?.style.display === 'flex'; }
 function cycleDays(c){ return c==='day' ? 1 : (c==='week' ? 7 : (c==='month' ? 30 : 0)); }
 function cycleZh(c){ return c==='day' ? '每日' : (c==='week' ? '每周' : (c==='month' ? '每月' : '-')); }
 function isMobileView(){ return window.matchMedia('(max-width: 768px)').matches; }
+function showFundModal(){
+  modalScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  document.getElementById('fundModalMask').style.display='flex';
+  document.body.style.top = `-${modalScrollY}px`;
+  document.body.classList.add('modal-open');
+}
 function openAddModal(){
   editingCode='';
   const mobile = isMobileView();
@@ -266,7 +287,7 @@ function openAddModal(){
   document.getElementById('costWrap').style.display = mobile ? 'none' : 'block';
   ['code','name','group','shares','cost','dcaAmount'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('dcaCycle').value='';
-  document.getElementById('fundModalMask').style.display='flex';
+  showFundModal();
 }
 function openEditModal(code){
   const p=positions.find(x=>x.code===code); if(!p) return;
@@ -285,10 +306,13 @@ function openEditModal(code){
   document.getElementById('cost').value=Number(p.cost||0);
   document.getElementById('dcaAmount').value=Number(p.dcaAmount||0);
   document.getElementById('dcaCycle').value=p.dcaCycle||'';
-  document.getElementById('fundModalMask').style.display='flex';
+  showFundModal();
 }
 function closeFundModal(){
   document.getElementById('fundModalMask').style.display='none';
+  document.body.classList.remove('modal-open');
+  document.body.style.top = '';
+  window.scrollTo(0, modalScrollY || 0);
   hideNameDropdown();
 }
 
@@ -319,16 +343,20 @@ async function saveFundModal(){
 }
 function toggleAccountMenu(){
   const el=document.getElementById('accountMenu');
+  if(!el) return;
   el.style.display = el.style.display==='none' ? 'block' : 'none';
 }
 function setUserState(){
   const logged = cloudMode() && !!token;
-  document.getElementById('userState').textContent = cloudMode() ? (logged ? '当前：云端已登录' : '当前：云端未登录') : '当前：本地模式';
-  document.getElementById('loginCard').style.display = logged ? 'none' : 'block';
-  document.getElementById('accountMini').style.display = logged ? 'block' : 'none';
+  const userState=document.getElementById('userState');
+  const loginCard=document.getElementById('loginCard');
+  const accountMini=document.getElementById('accountMini');
+  if(userState) userState.textContent = cloudMode() ? '当前：个人免登录云端同步' : '当前：本地模式';
+  if(loginCard) loginCard.style.display = 'none';
+  if(accountMini) accountMini.style.display = 'none';
   const avatar=document.getElementById('avatarBtn');
   const miniEmail=document.getElementById('miniEmail');
-  if(logged){
+  if(logged && avatar && miniEmail){
     const t=(currentEmail||'U').trim();
     avatar.textContent=(t[0]||'U').toUpperCase();
     miniEmail.textContent=currentEmail||'已登录';
@@ -376,7 +404,7 @@ async function apiFetch(path, options={}){
       clearTimeout(timer);
       if(res.status===401){
         token=''; localStorage.removeItem(TOKEN_KEY); setUserState();
-        throw new Error('登录已过期，请重新登录');
+        throw new Error('访问未授权，请稍后重试');
       }
       if(!res.ok){
         const txt=await res.text();
@@ -391,38 +419,9 @@ async function apiFetch(path, options={}){
   }
 }
 
-async function login(){
-  return withBusy(async()=>{
-    if(!cloudMode()) return alert('当前是本地模式，部署后端后再登录');
-    const email=document.getElementById('email').value.trim();
-    const password=document.getElementById('password').value;
-    if(!email || !password) return alert('请填写邮箱和密码');
-    try{
-      const data=await apiFetch('/auth/login',{method:'POST',body:JSON.stringify({email,password})});
-      token=data.token||'';
-      currentEmail=email;
-      localStorage.setItem(TOKEN_KEY,token);
-      localStorage.setItem('fund_email_v1', currentEmail);
-      setUserState();
-      try{
-        positions=await dataStore.list();
-      }catch(e){
-        setStatus('登录成功，但拉取持仓失败，请点刷新重试');
-      }
-      render();
-      alert('登录成功');
-    }catch(e){
-      alert('登录失败：'+e.message);
-    }
-  });
-}
-
-function logout(){ token=''; currentEmail=''; localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('fund_email_v1'); setUserState(); alert('已退出登录'); }
-
 const dataStore = {
   async list(){
     if(cloudMode()){
-      if(!token) return [];
       const d=await apiFetch('/positions?_t='+Date.now());
       return d.list||[];
     }
@@ -452,6 +451,23 @@ const dataStore = {
 async function fetchEstimate(code){
   if(!/^\d{6}$/.test(code)) throw new Error('代码需6位');
 
+  function estimateTimeValue(data){
+    if(!data || typeof data !== 'object') return 0;
+    const raw = String(data.gztime || data.jzrq || '').trim();
+    if(!raw) return 0;
+    const normalized = raw.replace(/-/g,'/').replace('T',' ');
+    const ts = new Date(normalized).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  }
+
+  function isHistoryOnlyEstimate(data){
+    const source = String(data && data.source || '');
+    const rawTime = String(data && data.gztime || '').trim();
+    // eastmoney-lsjz 是历史净值兜底，常见格式为「YYYY-MM-DD 15:00:00」；
+    // 如果当天实时估值源临时失败，不能让它抢先盖过用户浏览器可拿到的 JSONP 实时估值。
+    return source === 'eastmoney-lsjz' || (/^\d{4}-\d{2}-\d{2} 15:00(?::00)?$/.test(rawTime) && source !== 'fundgz');
+  }
+
   function normalizeEstimate(data){
     if(!data || typeof data !== 'object') return null;
     const hasPrice = Number(data.gsz) > 0 || Number(data.dwjz) > 0;
@@ -460,35 +476,45 @@ async function fetchEstimate(code){
     return data;
   }
 
+  async function fetchJsonpEstimate(){
+    const data = await new Promise((resolve,reject)=>{
+      const old = window.jsonpgz;
+      const timeout=setTimeout(()=>{ cleanup(); reject(new Error('估值获取失败，请稍后重试')); },10000);
+      function cleanup(){ clearTimeout(timeout); window.jsonpgz = old; if(script && script.parentNode) script.parentNode.removeChild(script); }
+      window.jsonpgz=(payload)=>{ cleanup(); resolve(payload); };
+      const script=document.createElement('script');
+      script.src=`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`;
+      script.onerror=()=>{ cleanup(); reject(new Error('估值获取失败，请稍后重试')); };
+      document.body.appendChild(script);
+    });
+    const normalized = normalizeEstimate(data);
+    return normalized ? {...normalized, source: normalized.source || 'fundgz-jsonp'} : null;
+  }
+
   // 优先走同域后端接口（适配飞书内置浏览器/移动端限制）
+  let apiData = null;
   try{
     const r = await fetch(`${API_BASE}/api/estimate?code=${code}&_t=${Date.now()}`);
     if(r.ok){
-      const data = normalizeEstimate(await r.json());
-      if(data) return data;
+      apiData = normalizeEstimate(await r.json());
+      if(apiData && !isHistoryOnlyEstimate(apiData)) return apiData;
     }
   }catch{}
 
-  // 兜底：JSONP
-  const data = await new Promise((resolve,reject)=>{
-    const old = window.jsonpgz;
-    const timeout=setTimeout(()=>{ cleanup(); reject(new Error('估值获取失败，请稍后重试')); },10000);
-    function cleanup(){ clearTimeout(timeout); window.jsonpgz = old; if(script && script.parentNode) script.parentNode.removeChild(script); }
-    window.jsonpgz=(payload)=>{ cleanup(); resolve(payload); };
-    const script=document.createElement('script');
-    script.src=`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`;
-    script.onerror=()=>{ cleanup(); reject(new Error('估值获取失败，请稍后重试')); };
-    document.body.appendChild(script);
-  });
+  // 兜底：用户浏览器直连 JSONP。若后端只拿到历史净值，这里拿到更晚时间则择优使用。
+  try{
+    const jsonpData = await fetchJsonpEstimate();
+    if(jsonpData){
+      if(!apiData || estimateTimeValue(jsonpData) >= estimateTimeValue(apiData)) return jsonpData;
+    }
+  }catch{}
 
-  const normalized = normalizeEstimate(data);
-  if(!normalized) throw new Error('该基金暂无实时估值或代码不存在');
-  return normalized;
+  if(apiData) return apiData;
+  throw new Error('该基金暂无实时估值或代码不存在');
 }
 
 async function addFund(){
   return withBusy(async()=>{
-    if(cloudMode() && !token) return alert('请先登录，再进行云端同步操作');
     const code=document.getElementById('code').value.trim();
     const nameInput=document.getElementById('name').value.trim();
     const groupInput=document.getElementById('group').value.trim();
@@ -536,7 +562,6 @@ async function addFund(){
 
 async function removeFund(code){
   return withBusy(async()=>{
-    if(cloudMode() && !token) return alert('请先登录，再进行云端同步操作');
     if(!confirm('确认删除?')) return;
     const row=positions.find(x=>x.code===code);
     if(!row) return;
@@ -554,7 +579,6 @@ async function removeFund(code){
 
 async function updateFund(){
   return withBusy(async()=>{
-    if(cloudMode() && !token) return alert('请先登录，再进行云端同步操作');
     const p=positions.find(x=>x.code===editingCode); if(!p) return;
     const nameInput=document.getElementById('name').value.trim();
     const groupInput=document.getElementById('group').value.trim();
@@ -588,7 +612,7 @@ async function updateFund(){
 
     try{
       const patch={name:p.name,group:p.group,shares:p.shares,cost:p.cost,dcaAmount:p.dcaAmount,dcaCycle:p.dcaCycle,dcaLastAt:p.dcaLastAt||''};
-      if(cloudMode() && token){
+      if(cloudMode()){
         const saved = await apiFetch(`/positions/${encodeURIComponent(p.id)}`,{method:'PUT',body:JSON.stringify(patch)});
         Object.assign(p, saved || {});
       }else{
@@ -608,7 +632,7 @@ async function refreshOne(code, { renderNow = true, persistNow = true } = {}){
     p.estimate=await fetchEstimate(code);
     estimateCache[code] = p.estimate;
     if(!p.name||p.name===p.code) p.name=(p.estimate && p.estimate.name) ? p.estimate.name : p.name;
-    if(persistNow && (!cloudMode() || token)) await dataStore.update(p,{estimate:p.estimate,name:p.name});
+    if(persistNow) await dataStore.update(p,{estimate:p.estimate,name:p.name});
   }catch(e){ p.estimate={error:e.message}; }
   if(renderNow) render();
 }
@@ -662,7 +686,7 @@ async function refreshAllCore(){
 
   // 后台异步持久化估值（不阻塞前台）
   Promise.allSettled(
-    positions.map(p => ((!cloudMode() || token) ? dataStore.update(p,{estimate:p.estimate,name:p.name}) : Promise.resolve()))
+    positions.map(p => dataStore.update(p,{estimate:p.estimate,name:p.name}))
   ).catch(()=>{});
 
   await applyDcaAll();
@@ -880,11 +904,21 @@ function render(){
     const day=(gsz-dwjz)*Number(p.shares);
     const holdRate = Number(p.cost)>0 ? (pnl/Number(p.cost)*100) : 0;
     const dayRate = Number(e.gszzl||0);
-    return `<div class="m-row">
-      <div class="m-name">[${p.group||'-'}] ${p.name||'-'}<div class="muted">${p.code}</div></div>
-      <div class="m-col"><div class="m-main">${fmt(mv)}</div></div>
-      <div class="m-col"><div class="m-main ${cls(day)}">${fmt(day)}</div><div class="m-sub ${cls(dayRate)}">${fmt(dayRate,2)}%</div></div>
-      <div class="m-col"><div class="m-main ${cls(pnl)}">${fmt(pnl)}</div><div class="m-sub ${cls(holdRate)}">${fmt(holdRate,2)}%</div></div>
+    return `<div class="m-card" role="button" tabindex="0" onclick="openEditModal('${esc(p.code)}')" onkeydown="if(event.key==='Enter')openEditModal('${esc(p.code)}')">
+      <div class="m-card-head">
+        <div class="m-card-title">
+          <div class="m-card-name">${esc(p.name||'-')}</div>
+          <div class="m-card-meta"><span class="m-tag">${esc(p.group||'未分组')}</span><span>${esc(p.code)}</span></div>
+        </div>
+        <div class="m-edit-hint">编辑 ›</div>
+      </div>
+      <div class="m-metrics">
+        <div class="m-metric"><div class="m-label">总市值</div><div class="m-value">${fmt(mv)}</div></div>
+        <div class="m-metric"><div class="m-label">当日盈亏</div><div class="m-value ${cls(day)}">${fmt(day)}</div></div>
+        <div class="m-metric"><div class="m-label">持仓盈亏</div><div class="m-value ${cls(pnl)}">${fmt(pnl)}</div></div>
+        <div class="m-metric"><div class="m-label">收益率</div><div class="m-value small ${cls(holdRate)}">${fmt(holdRate,2)}% <span class="${cls(dayRate)}">/ ${fmt(dayRate,2)}%</span></div></div>
+      </div>
+      <div class="m-time">更新时间：${esc(e.gztime || e.jzrq || '-')}</div>
     </div>`;
   }).join('');
 
@@ -959,7 +993,7 @@ function render(){
     hydrateEstimatesFromCache();
     await normalizeOrderIfNeeded();
   }catch(e){
-    setStatus('初始化失败：请检查网络或重新登录');
+    setStatus('初始化失败：请检查网络后刷新');
     positions = [];
   }
   updateSortButtons();
